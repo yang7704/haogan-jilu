@@ -119,7 +119,6 @@ function showIdentityPicker() {
     switchLink.addEventListener('click', (e) => {
       e.preventDefault();
       storeIdentity(null);
-      // 清空 localStorage 数据以便重新初始化
       try { localStorage.removeItem('love_points_data'); } catch(e) {}
       location.reload();
     });
@@ -154,7 +153,7 @@ function getRightPerson() { return viewerIdentity === 'personA' ? 'personB' : 'p
 
 // ===== 本地存储 =====
 const STORAGE_KEY = 'love_points_data';
-const DATA_VERSION = 2;
+const DATA_VERSION = 3;
 function loadLocalData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -183,7 +182,10 @@ if (socket) {
   });
 
   socket.on('confirmationRequested', ({ pending }) => {
-    showToast(getDisplayName(pending.otherPerson) + ' 有新的加分需要你确认 👀');
+    // 只有对方才收到确认通知（不是发起者自己）
+    if (pending.otherPerson === viewerIdentity) {
+      showToast(getDisplayName(pending.person) + ' 有新的加分需要你确认 👀');
+    }
   });
 
   socket.on('bonusConfirmed', ({ pending }) => {
@@ -266,7 +268,10 @@ function renderPendingConfirmations() {
   const section = $('#pendingSection');
   if (!appData || !appData.pendingConfirmations) return;
 
-  const pending = appData.pendingConfirmations.filter(p => p.status === 'pending');
+  // 只显示需要"我"确认的（otherPerson === viewerIdentity）
+  const pending = appData.pendingConfirmations.filter(p =>
+    p.status === 'pending' && p.otherPerson === viewerIdentity
+  );
 
   if (pending.length === 0) {
     section.style.display = 'none';
@@ -370,10 +375,13 @@ function setupTabs() {
 function setupModal() {
   $('#cancelComplete').addEventListener('click', closeModal);
   $('#confirmComplete').addEventListener('click', () => {
-    if (currentTask && currentTask.type === 'bonus') {
+    if (!currentTask) return;
+    const isSelf = (selectedPerson === viewerIdentity);
+    if (currentTask.type === 'bonus' && !isSelf) {
       confirmBonusTask();
     } else {
-      confirmPenaltyTask();
+      // 给自己加分 或 任何扣分：都需要验证
+      confirmTaskWithProof();
     }
   });
   $('#selectPersonA').addEventListener('click', () => selectModalPerson('personA'));
@@ -401,21 +409,34 @@ function openCompleteModal(taskData) {
   }
 
   const pointsEl = $('#modalPoints');
+  const isSelfOperation = (selectedPerson === viewerIdentity);
+
   if (type === 'bonus') {
     pointsEl.textContent = '+' + pts + ' 分';
     pointsEl.className = 'modal-points bonus';
-    $('#completeModal').querySelector('.modal-heart').textContent = '🌟';
-    $('#confirmComplete').textContent = '📩 提交，等待对方确认';
-    $('#modalNoteLabel').textContent = '备注（可选）';
-    $('#modalNote').setAttribute('placeholder', '告诉对方你是怎么完成的...');
-    $('#attachmentArea').style.display = 'none';
-    $('#modalNoteRequired').style.display = 'none';
+    $('#completeModal').querySelector('.modal-heart').textContent = '✨';
+
+    if (isSelfOperation) {
+      // 给自己加分：需要截图证明
+      $('#confirmComplete').textContent = '✅ 确认提交（需截图证明）';
+      $('#modalNoteLabel').textContent = '完成证明（必填理由+截图）';
+      $('#modalNote').setAttribute('placeholder', '说明情况，并粘贴截图证明...');
+      $('#attachmentArea').style.display = 'block';
+      $('#modalNoteRequired').style.display = 'block';
+    } else {
+      $('#confirmComplete').textContent = '📩 提交，等待对方确认';
+      $('#modalNoteLabel').textContent = '备注（可选）';
+      $('#modalNote').setAttribute('placeholder', '告诉对方你是怎么完成的...');
+      $('#attachmentArea').style.display = 'none';
+      $('#modalNoteRequired').style.display = 'none';
+    }
   } else {
+    // 扣分：一律需要理由+截图
     pointsEl.textContent = pts + ' 分';
     pointsEl.className = 'modal-points penalty';
     $('#completeModal').querySelector('.modal-heart').textContent = '📝';
-    $('#confirmComplete').textContent = '⚠️ 确认扣分';
-    $('#modalNoteLabel').textContent = '扣分原因（必填）';
+    $('#confirmComplete').textContent = '⚠️ 确认提交（需说明理由）';
+    $('#modalNoteLabel').textContent = '原因（必填）';
     $('#modalNote').setAttribute('placeholder', '请说明具体原因，比如：昨天一整天没回消息...');
     $('#attachmentArea').style.display = 'block';
     $('#modalNoteRequired').style.display = 'block';
@@ -436,6 +457,27 @@ function openCompleteModal(taskData) {
   $('#completeModal').classList.add('active');
 }
 
+// 当选择的人物改变时，更新弹窗状态
+function onPersonChanged() {
+  if (!currentTask) return;
+  const isSelf = (selectedPerson === viewerIdentity);
+  if (currentTask.type === 'bonus') {
+    if (isSelf) {
+      $('#confirmComplete').textContent = '✅ 确认提交（需截图证明）';
+      $('#modalNoteLabel').textContent = '完成证明（必填理由+截图）';
+      $('#modalNote').setAttribute('placeholder', '说明情况，并粘贴截图证明...');
+      $('#attachmentArea').style.display = 'block';
+      $('#modalNoteRequired').style.display = 'block';
+    } else {
+      $('#confirmComplete').textContent = '📩 提交，等待对方确认';
+      $('#modalNoteLabel').textContent = '备注（可选）';
+      $('#modalNote').setAttribute('placeholder', '告诉对方你是怎么完成的...');
+      $('#attachmentArea').style.display = 'none';
+      $('#modalNoteRequired').style.display = 'none';
+    }
+  }
+}
+
 function closeModal() {
   $('#completeModal').classList.remove('active');
   currentTask = null;
@@ -447,9 +489,10 @@ function selectModalPerson(person) {
   selectedPerson = person;
   $('#selectPersonA').classList.toggle('active', person === 'personA');
   $('#selectPersonB').classList.toggle('active', person === 'personB');
+  onPersonChanged();
 }
 
-// —— 加分提交（等待确认） ——
+// —— 加分提交（对方确认） ——
 function confirmBonusTask() {
   if (!currentTask) return;
   const { taskId, title, points } = currentTask;
@@ -494,47 +537,81 @@ function confirmBonusTask() {
   closeModal();
 }
 
-// —— 扣分（立即生效） ——
-function confirmPenaltyTask() {
+// —— 需证明的操作（给自己加分 / 所有扣分） ——
+function confirmTaskWithProof() {
   if (!currentTask) return;
-  const { taskId, title, points } = currentTask;
+  const { taskId, title, points, type } = currentTask;
   const pts = parseInt(points);
   const note = $('#modalNote').value.trim();
 
   if (!note) {
-    showToast('⚠️ 扣分必须填写原因');
+    showToast('⚠️ 必须填写原因');
     return;
   }
 
-  const payload = {
-    person: selectedPerson,
-    taskId,
-    taskTitle: title,
-    points: pts,
-    type: 'penalty',
-    note,
-    attachments: pendingAttachments
-  };
-
-  if (useServer && socket && socket.connected) {
-    socket.emit('applyPenalty', payload);
-  } else {
-    const actualPts = -Math.abs(pts);
-    const activity = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      person: selectedPerson, taskId, taskTitle: title,
-      points: actualPts, type: 'penalty', note,
-      attachments: pendingAttachments,
-      timestamp: Date.now()
+  if (type === 'bonus') {
+    // 给自己加分：直接生效
+    const payload = {
+      person: selectedPerson,
+      taskId,
+      taskTitle: title,
+      points: pts,
+      type: 'self_bonus',
+      note,
+      attachments: pendingAttachments
     };
-    appData.scores[selectedPerson].points += actualPts;
-    appData.activities.unshift(activity);
-    appData.totalCompleted++;
-    if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
-    saveLocalData(appData);
-    updateUI();
-    showScorePop(actualPts);
-    showToast(getDisplayName(selectedPerson) + ' ' + title + ' ' + actualPts + '分');
+
+    if (useServer && socket && socket.connected) {
+      socket.emit('applySelfBonus', payload);
+    } else {
+      const activity = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        person: selectedPerson, taskId, taskTitle: title,
+        points: pts, type: 'self_bonus', note,
+        attachments: pendingAttachments,
+        timestamp: Date.now()
+      };
+      appData.scores[selectedPerson].points += pts;
+      appData.activities.unshift(activity);
+      appData.totalCompleted++;
+      if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
+      saveLocalData(appData);
+      updateUI();
+      showScorePop(pts);
+      showToast(getDisplayName(selectedPerson) + ' 「' + title + '」+' + pts + '分（已证明）');
+    }
+  } else {
+    // 扣分：直接生效
+    const payload = {
+      person: selectedPerson,
+      taskId,
+      taskTitle: title,
+      points: pts,
+      type: 'penalty',
+      note,
+      attachments: pendingAttachments
+    };
+
+    if (useServer && socket && socket.connected) {
+      socket.emit('applyPenalty', payload);
+    } else {
+      const actualPts = -Math.abs(pts);
+      const activity = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        person: selectedPerson, taskId, taskTitle: title,
+        points: actualPts, type: 'penalty', note,
+        attachments: pendingAttachments,
+        timestamp: Date.now()
+      };
+      appData.scores[selectedPerson].points += actualPts;
+      appData.activities.unshift(activity);
+      appData.totalCompleted++;
+      if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
+      saveLocalData(appData);
+      updateUI();
+      showScorePop(actualPts);
+      showToast(getDisplayName(selectedPerson) + ' ' + title + ' ' + actualPts + '分');
+    }
   }
 
   closeModal();
@@ -562,7 +639,10 @@ function setupAttachmentArea() {
 
   document.addEventListener('paste', (e) => {
     if (!$('#completeModal').classList.contains('active')) return;
-    if (currentTask && currentTask.type !== 'penalty') return;
+    // 给自己加分或扣分时，允许粘贴截图
+    if (!currentTask) return;
+    const isSelf = (selectedPerson === viewerIdentity);
+    if (currentTask.type === 'bonus' && !isSelf) return; // 给对方加分不需要截图
     const items = e.clipboardData.items;
     for (const item of items) {
       if (item.type.startsWith('image/')) {
@@ -648,6 +728,8 @@ function renderActivities(activities) {
       icon = '⏳'; cssClass = 'pending'; pointsText = '(待确认) +' + a.points;
     } else if (a.type === 'rejected_bonus') {
       icon = '❌'; cssClass = 'rejected'; pointsText = '(已拒绝)';
+    } else if (a.type === 'self_bonus') {
+      icon = '✨'; cssClass = 'positive'; pointsText = '+' + a.points + ' (自证)';
     }
 
     const time = new Date(a.timestamp).toLocaleString('zh-CN', {

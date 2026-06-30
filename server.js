@@ -200,6 +200,36 @@ io.on('connection', (socket) => {
     io.emit('penaltyApplied', { activity, scores: appData.scores });
   });
 
+  // —— 自证加分（给自己加分，需截图证明） ——
+  socket.on('applySelfBonus', (payload) => {
+    const { person, taskId, taskTitle, points, note, attachments } = payload;
+
+    if (!['personA', 'personB'].includes(person)) return;
+    if (points <= 0) return;
+
+    const activity = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      person,
+      taskId,
+      taskTitle,
+      points: Math.abs(points),
+      type: 'self_bonus',
+      note: note || '',
+      attachments: attachments || [],
+      timestamp: Date.now()
+    };
+
+    appData.scores[person].points += Math.abs(points);
+    appData.activities.unshift(activity);
+    appData.totalCompleted++;
+
+    if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
+
+    saveData(appData);
+    io.emit('dataUpdate', appData);
+    io.emit('selfBonusApplied', { activity, scores: appData.scores });
+  });
+
   // —— 更新昵称 ——
   socket.on('updateName', (payload) => {
     const { person, name } = payload;
