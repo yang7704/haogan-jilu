@@ -152,10 +152,9 @@ function getDisplayName(person) {
 }
 
 function getAvatar(person) {
-  if (!viewerIdentity) {
-    return person === 'personA' ? '/images/avatar-me.jpg' : '/images/avatar-ta.jpg';
-  }
-  if (person === viewerIdentity) return '/images/avatar-me.jpg';
+  // personA = 小帅（男生头像），personB = 一个大聪明（女生头像）
+  // 不受 viewerIdentity 影响，固定对应
+  if (person === 'personA') return '/images/avatar-me.jpg';
   return '/images/avatar-ta.jpg';
 }
 
