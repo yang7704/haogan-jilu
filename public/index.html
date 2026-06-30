@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌱 好感度记录簿</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🌱</text></svg>">
+</head>
+<body>
+
+  <!-- 身份选择弹窗 -->
+  <div class="identity-overlay" id="identityOverlay">
+    <div class="identity-dialog">
+      <div class="identity-title">👋 你是谁？</div>
+      <div class="identity-subtitle">选好后每次打开自动识别</div>
+      <div class="identity-options">
+        <div class="identity-card" data-identity="personA">
+          <div class="identity-avatar"><img src="/images/avatar-me.jpg" alt=""></div>
+          <div class="identity-name">我是这个人</div>
+        </div>
+        <div class="identity-card" data-identity="personB">
+          <div class="identity-avatar"><img src="/images/avatar-ta.jpg" alt=""></div>
+          <div class="identity-name">我是这个人</div>
+        </div>
+      </div>
+      <div class="identity-switch">选错了？点<a href="#" id="switchIdentity">这里</a>重新选择</div>
+    </div>
+  </div>
+
+  <!-- 粒子背景 -->
+  <div class="particles" id="particles"></div>
+
+  <!-- 顶部导航 -->
+  <header class="header">
+    <div class="header-inner">
+      <h1 class="logo">🌱 好感度记录簿</h1>
+      <div class="header-stats">
+        <span class="stat-badge">📋 <span id="totalCompleted">0</span> 次记录</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="main">
+
+    <!-- 积分榜 -->
+    <section class="scoreboard">
+      <div class="person-card person-a" id="personACard">
+        <div class="person-avatar-wrap"><img class="person-avatar-img" src="/images/avatar-me.jpg" alt="我"></div>
+        <div class="person-info">
+          <div class="person-name" id="personAName" contenteditable="true">我</div>
+          <div class="person-score-wrap">
+            <span class="person-score" id="personAScore">0</span>
+            <span class="person-label">分</span>
+          </div>
+        </div>
+        <div class="score-bar">
+          <div class="score-bar-fill" id="personABar"></div>
+        </div>
+      </div>
+
+      <div class="vs-badge">
+      <div class="vs-heart">☕</div>
+      <div class="vs-text">异地 · 慢慢来</div>
+      </div>
+
+      <div class="person-card person-b" id="personBCard">
+        <div class="person-avatar-wrap"><img class="person-avatar-img" src="/images/avatar-ta.jpg" alt="TA"></div>
+        <div class="person-info">
+          <div class="person-name" id="personBName" contenteditable="true">TA</div>
+          <div class="person-score-wrap">
+            <span class="person-score" id="personBScore">0</span>
+            <span class="person-label">分</span>
+          </div>
+        </div>
+        <div class="score-bar">
+          <div class="score-bar-fill" id="personBBar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 总分横幅 -->
+    <div class="total-banner" id="totalBanner">
+      <span class="total-label">🐣 好感总分</span>
+      <span class="total-score" id="totalScore">0</span>
+    </div>
+
+    <!-- 待确认加分 -->
+    <section class="pending-section" id="pendingSection" style="display:none;">
+      <div class="pending-header">
+        <h2 class="section-title">⌛ 待确认 <span class="pending-badge" id="pendingBadge">0</span></h2>
+        <span class="pending-hint">对方提交的加分需要你来确认</span>
+      </div>
+      <div class="pending-list" id="pendingList"></div>
+    </section>
+
+    <!-- 任务面板 -->
+    <section class="task-panel">
+      <div class="panel-tabs">
+        <button class="tab active" data-tab="bonus">✨ 加分行为</button>
+        <button class="tab" data-tab="penalty">💤 扣分提醒</button>
+      </div>
+
+      <!-- 加分任务列表 -->
+      <div class="task-list active" id="bonusTasks">
+        <!-- JS 动态渲染 -->
+      </div>
+
+      <!-- 扣分事项列表 -->
+      <div class="task-list" id="penaltyTasks">
+        <!-- JS 动态渲染 -->
+      </div>
+    </section>
+
+    <!-- 动态记录 -->
+    <section class="activity-log">
+      <h2 class="section-title">📋 记录日志</h2>
+      <div class="activity-list" id="activityList">
+        <div class="activity-empty">还没有记录，先从一件小事开始吧 ☕</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 完成任务弹窗 -->
+  <div class="modal-overlay" id="completeModal">
+    <div class="modal">
+      <div class="modal-heart">✨</div>
+      <h3 class="modal-title" id="modalTitle"></h3>
+      <p class="modal-points" id="modalPoints"></p>
+      <div class="modal-confirm">
+        <label class="modal-label">是谁完成的？</label>
+        <div class="person-select">
+          <button class="person-btn" data-person="personA" id="selectPersonA">我</button>
+          <button class="person-btn active" data-person="personB" id="selectPersonB">TA</button>
+        </div>
+      </div>
+      <div class="modal-note">
+        <label class="modal-label" id="modalNoteLabel">备注（可选）</label>
+        <input type="text" class="modal-input" id="modalNote" placeholder="比如：手写了3页纸...">
+        <span class="modal-note-required" id="modalNoteRequired" style="display:none;color:var(--coral);font-size:12px;">* 扣分必须写明原因</span>
+      </div>
+      <!-- 截图附件（仅扣分时显示） -->
+      <div class="modal-attachments" id="attachmentArea" style="display:none;">
+        <label class="modal-label">📎 截图附件（可选，支持粘贴/拖拽）</label>
+        <div class="attachment-drop-zone" id="attachmentDropZone">
+          📋 点击选择图片 / 直接粘贴截图 / 拖拽图片到这里
+        </div>
+        <input type="file" id="attachmentInput" accept="image/*" multiple style="display:none;">
+        <div class="attachment-previews" id="attachmentPreviews"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-cancel" id="cancelComplete">取消</button>
+        <button class="btn btn-confirm" id="confirmComplete">✅ 确认完成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 加分动画覆盖层 -->
+  <div class="score-pop" id="scorePop"></div>
+
+  <!-- Toast 提示 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
