@@ -58,7 +58,7 @@ let selectedPerson = 'personB';
 let pendingAttachments = [];
 
 const DEFAULT_DATA = {
-  scores: { personA: { name: '你的名字', points: 80 }, personB: { name: 'TA的名字', points: 73 } },
+  scores: { personA: { name: '小帅', points: 80 }, personB: { name: '一个大聪明', points: 73 } },
   activities: [],
   totalCompleted: 0
 };

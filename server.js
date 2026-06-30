@@ -24,7 +24,7 @@ function loadData() {
     }
   } catch (e) { console.error('加载数据失败:', e.message); }
   return {
-    scores: { personA: { name: '你的名字', points: 80 }, personB: { name: 'TA的名字', points: 73 } },
+    scores: { personA: { name: '小帅', points: 80 }, personB: { name: '一个大聪明', points: 73 } },
     activities: [],
     totalCompleted: 0
   };
@@ -45,7 +45,7 @@ app.get('/api/data', (req, res) => {
 
 app.post('/api/reset', (req, res) => {
   appData = {
-    scores: { personA: { name: '你的名字', points: 80 }, personB: { name: 'TA的名字', points: 73 } },
+    scores: { personA: { name: '小帅', points: 80 }, personB: { name: '一个大聪明', points: 73 } },
     activities: [],
     totalCompleted: 0
   };
