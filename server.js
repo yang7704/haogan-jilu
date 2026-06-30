@@ -26,7 +26,6 @@ function loadData() {
   return {
     scores: { personA: { name: '你的名字', points: 80 }, personB: { name: 'TA的名字', points: 73 } },
     activities: [],
-    pendingConfirmations: [],
     totalCompleted: 0
   };
 }
@@ -48,7 +47,6 @@ app.post('/api/reset', (req, res) => {
   appData = {
     scores: { personA: { name: '你的名字', points: 80 }, personB: { name: 'TA的名字', points: 73 } },
     activities: [],
-    pendingConfirmations: [],
     totalCompleted: 0
   };
   saveData(appData);
@@ -62,115 +60,41 @@ io.on('connection', (socket) => {
   console.log('💌 新连接:', socket.id);
   socket.emit('dataUpdate', appData);
 
-  // —— 加分：提交给等待对方确认 ——
-  socket.on('requestConfirmation', (payload) => {
-    const { person, taskId, taskTitle, points, note, attachments } = payload;
+  // —— 加分：直接生效，通知对方 ——
+  socket.on('applyBonus', (payload) => {
+    const { person, taskId, taskTitle, points, note } = payload;
 
     if (!['personA', 'personB'].includes(person)) return;
-    if (points <= 0) return; // 只处理加分
+    if (points <= 0) return;
 
-    const otherPerson = person === 'personA' ? 'personB' : 'personA';
+    const pts = Math.abs(points);
 
-    const pending = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      person,           // 谁发起的
-      otherPerson,      // 需要谁确认
-      taskId,
-      taskTitle,
-      points: Math.abs(points),
-      note: note || '',
-      attachments: attachments || [],
-      status: 'pending',  // pending | approved | rejected
-      timestamp: Date.now()
-    };
+    // 加分
+    appData.scores[person].points += pts;
 
-    appData.pendingConfirmations.unshift(pending);
-
-    // 在活动日志里加一条"等待确认"的记录
+    // 写活动日志
     const activity = {
-      id: pending.id,
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       person,
       taskId,
       taskTitle,
-      points: Math.abs(points),
-      type: 'pending_bonus',
-      note: note || '',
-      attachments: attachments || [],
-      pendingId: pending.id,
-      timestamp: Date.now()
-    };
-    appData.activities.unshift(activity);
-
-    if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
-    if (appData.pendingConfirmations.length > 50) appData.pendingConfirmations = appData.pendingConfirmations.slice(0, 50);
-
-    saveData(appData);
-    io.emit('dataUpdate', appData);
-    io.emit('confirmationRequested', { pending, scores: appData.scores });
-  });
-
-  // —— 对方确认加分 ——
-  socket.on('confirmBonus', (payload) => {
-    const { pendingId } = payload;
-    const idx = appData.pendingConfirmations.findIndex(p => p.id === pendingId);
-    if (idx === -1) return;
-
-    const pending = appData.pendingConfirmations[idx];
-    pending.status = 'approved';
-
-    // 加分
-    appData.scores[pending.person].points += pending.points;
-
-    // 更新活动日志里的记录
-    const act = appData.activities.find(a => a.pendingId === pendingId);
-    if (act) {
-      act.type = 'bonus';
-      act.points = pending.points;
-    }
-
-    // 添加一条确认完成的日志
-    const confirmActivity = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      person: pending.person,
-      taskId: pending.taskId,
-      taskTitle: pending.taskTitle + ' ✅ 已确认',
-      points: pending.points,
+      points: pts,
       type: 'bonus',
-      note: '',
+      note: note || '',
       timestamp: Date.now()
     };
-    appData.activities.unshift(confirmActivity);
+
+    appData.activities.unshift(activity);
     appData.totalCompleted++;
     if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
 
     saveData(appData);
     io.emit('dataUpdate', appData);
-    io.emit('bonusConfirmed', { pending, scores: appData.scores });
+    // 通知对方有人加分了
+    io.emit('bonusApplied', { activity, scores: appData.scores, target: person });
   });
 
-  // —— 拒绝加分 ——
-  socket.on('rejectBonus', (payload) => {
-    const { pendingId } = payload;
-    const idx = appData.pendingConfirmations.findIndex(p => p.id === pendingId);
-    if (idx === -1) return;
-
-    const pending = appData.pendingConfirmations[idx];
-    pending.status = 'rejected';
-
-    // 更新活动日志
-    const act = appData.activities.find(a => a.pendingId === pendingId);
-    if (act) {
-      act.type = 'rejected_bonus';
-      act.points = 0;
-      act.taskTitle += ' ❌ 已拒绝';
-    }
-
-    saveData(appData);
-    io.emit('dataUpdate', appData);
-    io.emit('bonusRejected', { pending, scores: appData.scores });
-  });
-
-  // —— 扣分（不需确认，但要备注+截图） ——
+  // —— 扣分（不需确认，原因必填，截图可选） ——
   socket.on('applyPenalty', (payload) => {
     const { person, taskId, taskTitle, points, note, attachments } = payload;
 
@@ -198,36 +122,6 @@ io.on('connection', (socket) => {
     saveData(appData);
     io.emit('dataUpdate', appData);
     io.emit('penaltyApplied', { activity, scores: appData.scores });
-  });
-
-  // —— 自证加分（给自己加分，需截图证明） ——
-  socket.on('applySelfBonus', (payload) => {
-    const { person, taskId, taskTitle, points, note, attachments } = payload;
-
-    if (!['personA', 'personB'].includes(person)) return;
-    if (points <= 0) return;
-
-    const activity = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      person,
-      taskId,
-      taskTitle,
-      points: Math.abs(points),
-      type: 'self_bonus',
-      note: note || '',
-      attachments: attachments || [],
-      timestamp: Date.now()
-    };
-
-    appData.scores[person].points += Math.abs(points);
-    appData.activities.unshift(activity);
-    appData.totalCompleted++;
-
-    if (appData.activities.length > 100) appData.activities = appData.activities.slice(0, 100);
-
-    saveData(appData);
-    io.emit('dataUpdate', appData);
-    io.emit('selfBonusApplied', { activity, scores: appData.scores });
   });
 
   // —— 更新昵称 ——
