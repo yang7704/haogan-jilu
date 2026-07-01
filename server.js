@@ -190,7 +190,7 @@ io.on('connection', (socket) => {
 
   // —— 加分：直接生效 + 通知对方 ——
   socket.on('applyBonus', (payload) => {
-    const { person, taskId, taskTitle, points, note } = payload;
+    const { person, taskId, taskTitle, points, note, attachments } = payload;
     if (!['personA', 'personB'].includes(person)) return;
     if (points <= 0) return;
 
@@ -202,6 +202,7 @@ io.on('connection', (socket) => {
       points: Math.abs(points),
       type: 'bonus',
       note: note || '',
+      attachments: attachments || [],
       timestamp: Date.now()
     };
 

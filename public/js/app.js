@@ -350,14 +350,14 @@ function openCompleteModal(taskData) {
   const pointsEl = $('#modalPoints');
 
   if (type === 'bonus') {
-    // 加分：直接生效，备注可选
+    // 加分：直接生效，备注可选，截图可选
     pointsEl.textContent = '+' + pts + ' 分';
     pointsEl.className = 'modal-points bonus';
     $('#completeModal').querySelector('.modal-heart').textContent = '✨';
     $('#confirmComplete').textContent = '✅ 确认提交';
     $('#modalNoteLabel').textContent = '备注（可选）';
     $('#modalNote').setAttribute('placeholder', '比如：手写了3页纸...（可不填）');
-    $('#attachmentArea').style.display = 'none';
+    $('#attachmentArea').style.display = 'block';
     $('#modalNoteRequired').style.display = 'none';
   } else {
     // 扣分：直接生效，原因必填，截图可选
@@ -412,7 +412,8 @@ function confirmBonusTask() {
     taskTitle: title,
     points: pts,
     type: 'bonus',
-    note
+    note,
+    attachments: pendingAttachments
   };
 
   if (useServer && socket && socket.connected) {
@@ -424,6 +425,7 @@ function confirmBonusTask() {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       person: selectedPerson, taskId, taskTitle: title,
       points: pts, type: 'bonus', note,
+      attachments: pendingAttachments,
       timestamp: Date.now()
     };
     appData.activities.unshift(activity);
